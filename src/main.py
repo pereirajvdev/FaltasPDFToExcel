@@ -291,7 +291,7 @@ def extrair_dias_682(texto, ano_relatorio):
 # PROCESSAR PDF
 # ============================================================
 
-def processar_pdf(caminho, dados_horas):
+def processar_pdf(caminho, dados_horas, dados_dias):
 
     print()
     print("=" * 80)
@@ -411,33 +411,46 @@ def processar_pdf(caminho, dados_horas):
     # --------------------------------------------------------
 
     elif codigo_verba == "00682":
-
-        resultados = extrair_dias_682(
-            texto,
-            ano_relatorio
-        )
+        dados = extrair_dias_682(texto, ano_relatorio)
 
         print(
-            "Lançamentos de dias encontrados: "
-            f"{len(resultados)}"
+            f"  Registros encontrados: {len(dados)}"
         )
 
-        for item in resultados:
+        for registro in dados:
+            
+            funcionario = registro["funcionario"]
 
-            print(
-                f"  {item['funcionario']} | "
-                f"Mês-Folha: {item['mes_folha']} | "
-                f"Quantidade: "
-                f"{item['quantidade']:.2f} | "
-                f"Valor: "
-                f"{item['valor']:.2f}"
-            )
+            mes_folha = registro["mes_folha"]
+            mes = int(mes_folha[:2])
 
-        print(
-            "  [INFO] Verba 00682 não será "
-            "lançada na matriz de HORAS."
-        )
+            quantidade = registro["quantidade"]
 
+            if quantidade is None:
+                continue
+
+            if funcionario not in dados_dias:
+                dados_dias[funcionario] = {}
+
+            if ano_relatorio not in dados_dias[funcionario]:
+                dados_dias[funcionario][ano_relatorio] = {}
+
+            if mes not in dados_dias[funcionario][ano_relatorio]:
+                dados_dias[funcionario][ano_relatorio][mes] = 0
+
+            dados_dias[funcionario][ano_relatorio][mes] += quantidade
+
+    print("  Dias armazenados:")
+
+    for funcionario, anos in dados_dias.items():
+        for ano, meses in anos.items():
+            for mes, quantidade in meses.items():
+                print(
+                    f"    {funcionario} | "
+                    f"{ano} | "
+                    f"{NOMES_MESES.get(mes, mes)} | "
+                    f"{quantidade}"
+                )
     else:
 
         print(
@@ -450,7 +463,7 @@ def processar_pdf(caminho, dados_horas):
 # EXCEL
 # ============================================================
 
-def criar_excel(dados_horas, caminho_saida):
+def criar_excel(dados_horas, dados_dias, caminho_saida):
 
     if not ARQUIVO_TEMPLATE.exists():
 
@@ -516,8 +529,8 @@ def criar_excel(dados_horas, caminho_saida):
     # Configuração das tabelas
     # --------------------------------------------------------
 
-    COLUNA_INICIAL_BRUTA = 1      # A
-    COLUNA_INICIAL_CALCULADA = 17 # Q
+    COLUNA_INICIAL_BRUTA = 1       # A
+    COLUNA_INICIAL_CALCULADA = 17  # Q
 
     # --------------------------------------------------------
     # Posição inicial
@@ -526,14 +539,38 @@ def criar_excel(dados_horas, caminho_saida):
     linha = 1
 
     # --------------------------------------------------------
+    # Todos os funcionários
+    #
+    # Inclui funcionários que aparecem somente no 00682.
+    # --------------------------------------------------------
+
+    funcionarios = sorted(
+        set(dados_horas.keys()) |
+        set(dados_dias.keys())
+    )
+
+    # --------------------------------------------------------
     # Funcionários
     # --------------------------------------------------------
 
-    for funcionario in sorted(dados_horas):
+    for funcionario in funcionarios:
 
-        dados_funcionario = dados_horas[funcionario]
+        dados_funcionario = dados_horas.get(
+            funcionario,
+            {}
+        )
 
-        anos = sorted(dados_funcionario)
+        dados_dias_funcionario = dados_dias.get(
+            funcionario,
+            {}
+        )
+
+        # Todos os anos existentes, tanto em 00619 quanto 00682
+        anos = sorted(
+            set(dados_funcionario.keys()) |
+            set(dados_dias_funcionario.keys()),
+            reverse=True
+        )
 
         # ====================================================
         # TABELA 1 - HORAS BRUTAS
@@ -543,14 +580,20 @@ def criar_excel(dados_horas, caminho_saida):
 
         linha_cabecalho_bruto = linha
 
+        # ----------------------------------------------------
         # Funcionário
+        # ----------------------------------------------------
+
         ws.cell(
             row=linha,
             column=coluna_inicial,
             value=funcionario
         )
 
+        # ----------------------------------------------------
         # Carga horária
+        # ----------------------------------------------------
+
         ws.cell(
             row=linha,
             column=coluna_inicial + 1,
@@ -565,12 +608,22 @@ def criar_excel(dados_horas, caminho_saida):
 
         # Célula da carga horária
         linha_carga_horaria = linha
-        coluna_carga_horaria = coluna_inicial + 2
 
+        coluna_carga_horaria = (
+            coluna_inicial + 2
+        )
+
+        # ----------------------------------------------------
         # Meses
+        # ----------------------------------------------------
+
         for mes in range(1, 13):
 
-            coluna = coluna_inicial + 3 + (mes - 1)
+            coluna = (
+                coluna_inicial
+                + 3
+                + (mes - 1)
+            )
 
             celula = ws.cell(
                 row=linha,
@@ -582,12 +635,16 @@ def criar_excel(dados_horas, caminho_saida):
             celula.font = fonte_branca_negrito
             celula.alignment = alinhamento_centro
 
+        # Próxima linha
         linha += 1
 
         # Primeira linha dos anos
         linha_inicial_bruta = linha
 
+        # ----------------------------------------------------
         # Anos + horas
+        # ----------------------------------------------------
+
         for ano in anos:
 
             celula_ano = ws.cell(
@@ -602,10 +659,11 @@ def criar_excel(dados_horas, caminho_saida):
 
             for mes in range(1, 13):
 
-                horas = dados_funcionario.get(
-                    ano,
-                    {}
-                ).get(mes)
+                horas = (
+                    dados_funcionario
+                    .get(ano, {})
+                    .get(mes)
+                )
 
                 if horas is None:
                     continue
@@ -630,17 +688,30 @@ def criar_excel(dados_horas, caminho_saida):
 
         coluna_inicial = COLUNA_INICIAL_CALCULADA
 
-        # Mesmo funcionário
+        # ----------------------------------------------------
+        # Funcionário
+        # ----------------------------------------------------
+
         ws.cell(
             row=linha_cabecalho_bruto,
             column=coluna_inicial,
-            value=f"{funcionario} - Horas / Carga horária"
+            value=(
+                f"{funcionario} - "
+                f"Horas / Carga horária"
+            )
         )
 
+        # ----------------------------------------------------
         # Meses
+        # ----------------------------------------------------
+
         for mes in range(1, 13):
 
-            coluna = coluna_inicial + 3 + (mes - 1)
+            coluna = (
+                coluna_inicial
+                + 3
+                + (mes - 1)
+            )
 
             celula = ws.cell(
                 row=linha_cabecalho_bruto,
@@ -652,12 +723,22 @@ def criar_excel(dados_horas, caminho_saida):
             celula.font = fonte_branca_negrito
             celula.alignment = alinhamento_centro
 
+        # ----------------------------------------------------
         # Primeira linha dos anos calculados
+        # ----------------------------------------------------
+
         linha_calculada = linha_inicial_bruta
+
+        # ----------------------------------------------------
+        # Anos
+        # ----------------------------------------------------
 
         for indice, ano in enumerate(anos):
 
+            # ------------------------------------------------
             # Ano
+            # ------------------------------------------------
+
             celula_ano = ws.cell(
                 row=linha_calculada,
                 column=coluna_inicial + 2,
@@ -668,10 +749,18 @@ def criar_excel(dados_horas, caminho_saida):
             celula_ano.font = fonte_branca_negrito
             celula_ano.alignment = alinhamento_centro
 
+            # ------------------------------------------------
             # Linha correspondente na tabela bruta
+            # ------------------------------------------------
+
             linha_bruta = (
-                linha_inicial_bruta + indice
+                linha_inicial_bruta
+                + indice
             )
+
+            # ------------------------------------------------
+            # Meses
+            # ------------------------------------------------
 
             for mes in range(1, 13):
 
@@ -687,39 +776,86 @@ def criar_excel(dados_horas, caminho_saida):
                     + (mes - 1)
                 )
 
+                # Letra da coluna de horas brutas
                 coluna_bruta_letra = ws.cell(
                     row=1,
                     column=coluna_bruta
                 ).column_letter
 
+                # Letra da coluna de carga horária
                 coluna_carga_letra = ws.cell(
                     row=1,
                     column=COLUNA_INICIAL_BRUTA + 2
                 ).column_letter
 
-                # Exemplo:
-                # =SE(D3="";"";TRUNCAR(D3/$C$1))
-                #
-                # openpyxl recebe a fórmula em inglês:
-                # =IF(D3="","",TRUNC(D3/$C$1))
+                # ------------------------------------------------
+                # Dias provenientes do 00682
+                # ------------------------------------------------
 
-                formula = (
-                    f'=IF('
-                    f'{coluna_bruta_letra}{linha_bruta}="",'
-                    f'"",'
-                    f'TRUNC('
-                    f'{coluna_bruta_letra}{linha_bruta}/'
-                    f'${coluna_carga_letra}$'
-                    f'{linha_carga_horaria}'
-                    f')'
-                    f')'
+                dias = (
+                    dados_dias
+                    .get(funcionario, {})
+                    .get(ano, {})
+                    .get(mes, 0)
                 )
+
+                # ------------------------------------------------
+                # Célula das horas brutas
+                # ------------------------------------------------
+
+                horas_brutas = (
+                    f"{coluna_bruta_letra}"
+                    f"{linha_bruta}"
+                )
+
+                # ------------------------------------------------
+                # Fórmula
+                #
+                # Se houver dias:
+                #
+                #   horas / carga + dias
+                #
+                # Se não houver horas:
+                #
+                #   somente dias
+                #
+                # Se não houver nem horas nem dias:
+                #
+                #   vazio
+                # ------------------------------------------------
+
+                if dias:
+
+                    formula = (
+                        f'=IF({horas_brutas}="",'
+                        f'{dias},'
+                        f'TRUNC({horas_brutas}/'
+                        f'${coluna_carga_letra}'
+                        f'${linha_carga_horaria})'
+                        f'+{dias})'
+                    )
+
+                else:
+
+                    formula = (
+                        f'=IF({horas_brutas}="",'
+                        f'"",'
+                        f'TRUNC({horas_brutas}/'
+                        f'${coluna_carga_letra}'
+                        f'${linha_carga_horaria})'
+                        f')'
+                    )
 
                 ws.cell(
                     row=linha_calculada,
                     column=coluna_calculada,
                     value=formula
                 )
+
+            # ------------------------------------------------
+            # IMPORTANTE:
+            # avança para a próxima linha/ano
+            # ------------------------------------------------
 
             linha_calculada += 1
 
@@ -808,12 +944,13 @@ def main():
     )
 
     dados_horas = {}
+    dados_dias = {}
 
     for caminho_pdf in arquivos_pdf:
-
         processar_pdf(
             caminho_pdf,
-            dados_horas
+            dados_horas,
+            dados_dias
         )
 
     # ========================================================
@@ -878,6 +1015,7 @@ def main():
 
         sucesso = criar_excel(
             dados_horas,
+            dados_dias,
             caminho_saida
         )
 
