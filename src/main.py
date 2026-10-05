@@ -1,19 +1,18 @@
 import re
 import sys
 import math
-from pathlib import Path
-from openpyxl.styles import Font, PatternFill, Alignment
-
 import pdfplumber
-from openpyxl import load_workbook
 
+from pathlib import Path
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 
 ARQUIVO_TEMPLATE = Path(
-    r"C:\Users\Joao Castro\Documents\AutoFaltas\data\Faltas.xlsx"
+    r"data\Faltas.xlsx"
 )
 
 NOME_ABA = "Faltas"
@@ -38,9 +37,10 @@ PADRAO_CODIGO_VERBA = re.compile(
 PADRAO_LINHA_619 = re.compile(
     r"^"
     r"(?P<mes_folha>\d{2}-\d{2})\s+"
-    r"(?P<codigo>\d{6})\s+"
+    r"(?P<codigo>\d+)\s+"
     r"(?P<funcionario>.+?)\s+"
     r"(?P<admissao>\d{2}/\d{2}/\d{4})\s+"
+    r"(?:(?P<base>[\d.,]+)\s+)?"
     r"(?P<quantidade>[\d.,]+)\s+"
     r"(?P<valor>[\d.,]+)"
     r"$"
@@ -53,7 +53,7 @@ PADRAO_LINHA_682 = re.compile(
     r"(?P<codigo>\d{6})\s+"
     r"(?P<funcionario>.+?)\s+"
     r"(?P<admissao>\d{2}/\d{2}/\d{4})\s+"
-    r"(?P<base>[\d.,]+)\s+"
+    r"(?:(?P<base>[\d.,]+)\s+)?"
     r"(?P<quantidade>[\d.,]+)\s+"
     r"(?P<valor>[\d.,]+)"
     r"$"
@@ -489,9 +489,9 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
 
         return False
 
-    # --------------------------------------------------------
-    # Aba
-    # --------------------------------------------------------
+    # ========================================================
+    # ABA
+    # ========================================================
 
     if NOME_ABA in wb.sheetnames:
 
@@ -506,52 +506,170 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
             f"Usando '{ws.title}'."
         )
 
-    # --------------------------------------------------------
-    # Formatação
-    # --------------------------------------------------------
+    # ========================================================
+    # CORES
+    # ========================================================
 
-    preenchimento = PatternFill(
+    COR_PRINCIPAL = "1F4E78"       # Azul escuro
+    COR_SECUNDARIA = "5B9BD5"     # Azul médio
+    COR_MESES = "D9EAF7"           # Azul claro
+    COR_ANO = "5B9BD5"
+    COR_FUNDO = "F7F9FC"           # Fundo muito claro
+    COR_BORDA = "D9E1F2"
+    COR_TEXTO = "1F2937"
+    COR_BRANCO = "FFFFFF"
+
+    # ========================================================
+    # PREENCHIMENTOS
+    # ========================================================
+
+    preenchimento_principal = PatternFill(
         fill_type="solid",
-        fgColor="EB7B71"
+        fgColor=COR_PRINCIPAL
     )
 
-    fonte_branca_negrito = Font(
-        color="FFFFFF",
-        bold=True
+    preenchimento_secundario = PatternFill(
+        fill_type="solid",
+        fgColor=COR_SECUNDARIA
     )
+
+    preenchimento_meses = PatternFill(
+        fill_type="solid",
+        fgColor=COR_MESES
+    )
+
+    preenchimento_fundo = PatternFill(
+        fill_type="solid",
+        fgColor=COR_FUNDO
+    )
+
+    # ========================================================
+    # FONTES
+    # ========================================================
+
+    fonte_titulo = Font(
+        color=COR_BRANCO,
+        bold=True,
+        size=11
+    )
+
+    fonte_mes = Font(
+        color=COR_PRINCIPAL,
+        bold=True,
+        size=10
+    )
+
+    fonte_ano = Font(
+        color=COR_BRANCO,
+        bold=True,
+        size=10
+    )
+
+    fonte_funcionario = Font(
+        color=COR_BRANCO,
+        bold=True,
+        size=11
+    )
+
+    fonte_normal = Font(
+        color=COR_TEXTO,
+        size=10
+    )
+
+    fonte_carga = Font(
+        color=COR_PRINCIPAL,
+        bold=True,
+        size=10
+    )
+
+    # ========================================================
+    # ALINHAMENTOS
+    # ========================================================
 
     alinhamento_centro = Alignment(
         horizontal="center",
         vertical="center"
     )
 
-    # --------------------------------------------------------
-    # Configuração das tabelas
-    # --------------------------------------------------------
+    alinhamento_esquerda = Alignment(
+        horizontal="left",
+        vertical="center"
+    )
+
+    alinhamento_direita = Alignment(
+        horizontal="right",
+        vertical="center"
+    )
+
+    # ========================================================
+    # BORDAS
+    # ========================================================
+
+    borda_fina = Border(
+        left=Side(style="thin", color=COR_BORDA),
+        right=Side(style="thin", color=COR_BORDA),
+        top=Side(style="thin", color=COR_BORDA),
+        bottom=Side(style="thin", color=COR_BORDA)
+    )
+
+    # ========================================================
+    # CONFIGURAÇÃO DAS TABELAS
+    # ========================================================
 
     COLUNA_INICIAL_BRUTA = 1       # A
     COLUNA_INICIAL_CALCULADA = 17  # Q
 
-    # --------------------------------------------------------
-    # Posição inicial
-    # --------------------------------------------------------
+    # ========================================================
+    # LARGURA DAS COLUNAS
+    # ========================================================
+
+    # Tabela 1
+
+    ws.column_dimensions["A"].width = 32
+    ws.column_dimensions["B"].width = 15
+    ws.column_dimensions["C"].width = 10
+
+    # Meses A:O
+    for coluna in range(4, 16):
+
+        letra = ws.cell(
+            row=1,
+            column=coluna
+        ).column_letter
+
+        ws.column_dimensions[letra].width = 6
+
+    # Espaço entre tabelas
+    ws.column_dimensions["P"].width = 3
+
+    # Meses Q:AB
+    for coluna in range(18, 30):
+
+        letra = ws.cell(
+            row=1,
+            column=coluna
+        ).column_letter
+
+        ws.column_dimensions[letra].width = 6
+
+    # ========================================================
+    # POSIÇÃO INICIAL
+    # ========================================================
 
     linha = 1
 
-    # --------------------------------------------------------
-    # Todos os funcionários
-    #
-    # Inclui funcionários que aparecem somente no 00682.
-    # --------------------------------------------------------
+    # ========================================================
+    # TODOS OS FUNCIONÁRIOS
+    # ========================================================
 
     funcionarios = sorted(
         set(dados_horas.keys()) |
         set(dados_dias.keys())
     )
 
-    # --------------------------------------------------------
-    # Funcionários
-    # --------------------------------------------------------
+    # ========================================================
+    # FUNCIONÁRIOS
+    # ========================================================
 
     for funcionario in funcionarios:
 
@@ -565,7 +683,6 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
             {}
         )
 
-        # Todos os anos existentes, tanto em 00619 quanto 00682
         anos = sorted(
             set(dados_funcionario.keys()) |
             set(dados_dias_funcionario.keys()),
@@ -581,40 +698,61 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
         linha_cabecalho_bruto = linha
 
         # ----------------------------------------------------
-        # Funcionário
+        # FUNCIONÁRIO
         # ----------------------------------------------------
 
-        ws.cell(
+        celula = ws.cell(
             row=linha,
             column=coluna_inicial,
             value=funcionario
         )
 
+        celula.fill = preenchimento_principal
+        celula.font = fonte_funcionario
+        celula.alignment = alinhamento_esquerda
+        celula.border = borda_fina
+
         # ----------------------------------------------------
-        # Carga horária
+        # CARGA HORÁRIA
         # ----------------------------------------------------
 
-        ws.cell(
+        celula = ws.cell(
             row=linha,
             column=coluna_inicial + 1,
-            value="Carga horária:"
+            value="Carga horária"
         )
 
-        ws.cell(
+        celula.fill = preenchimento_principal
+        celula.font = fonte_titulo
+        celula.alignment = alinhamento_centro
+        celula.border = borda_fina
+
+        # ----------------------------------------------------
+        # VALOR DA CARGA
+        # ----------------------------------------------------
+
+        celula = ws.cell(
             row=linha,
             column=coluna_inicial + 2,
             value=CARGA_HORARIA_PADRAO
         )
 
-        # Célula da carga horária
+        celula.fill = preenchimento_principal
+        celula.font = fonte_funcionario
+        celula.alignment = alinhamento_centro
+        celula.border = borda_fina
+
         linha_carga_horaria = linha
 
         coluna_carga_horaria = (
             coluna_inicial + 2
         )
 
+        # Altura do cabeçalho
+        ws.row_dimensions[linha].height = 24
+
         # ----------------------------------------------------
-        # Meses
+        # MESES
         # ----------------------------------------------------
 
         for mes in range(1, 13):
@@ -631,21 +769,28 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
                 value=NOMES_MESES[mes]
             )
 
-            celula.fill = preenchimento
-            celula.font = fonte_branca_negrito
+            celula.fill = preenchimento_meses
+            celula.font = fonte_mes
             celula.alignment = alinhamento_centro
+            celula.border = borda_fina
 
-        # Próxima linha
+        # ----------------------------------------------------
+        # PRÓXIMA LINHA
+        # ----------------------------------------------------
+
         linha += 1
 
-        # Primeira linha dos anos
         linha_inicial_bruta = linha
 
-        # ----------------------------------------------------
-        # Anos + horas
-        # ----------------------------------------------------
+        # ====================================================
+        # ANOS + HORAS
+        # ====================================================
 
         for ano in anos:
+
+            # ------------------------------------------------
+            # ANO
+            # ------------------------------------------------
 
             celula_ano = ws.cell(
                 row=linha,
@@ -653,9 +798,31 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
                 value=ano
             )
 
-            celula_ano.fill = preenchimento
-            celula_ano.font = fonte_branca_negrito
+            celula_ano.fill = preenchimento_secundario
+            celula_ano.font = fonte_ano
             celula_ano.alignment = alinhamento_centro
+            celula_ano.border = borda_fina
+
+            # ------------------------------------------------
+            # CARGA / FUNCIONÁRIO
+            # ------------------------------------------------
+
+            for coluna in range(
+                coluna_inicial,
+                coluna_inicial + 2
+            ):
+
+                celula = ws.cell(
+                    row=linha,
+                    column=coluna
+                )
+
+                celula.fill = preenchimento_fundo
+                celula.border = borda_fina
+
+            # ------------------------------------------------
+            # MESES
+            # ------------------------------------------------
 
             for mes in range(1, 13):
 
@@ -665,20 +832,27 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
                     .get(mes)
                 )
 
-                if horas is None:
-                    continue
-
                 coluna = (
                     coluna_inicial
                     + 3
                     + (mes - 1)
                 )
 
-                ws.cell(
+                celula = ws.cell(
                     row=linha,
                     column=coluna,
                     value=horas
                 )
+
+                celula.alignment = alinhamento_centro
+                celula.border = borda_fina
+                celula.font = fonte_normal
+
+                if horas is not None:
+
+                    celula.number_format = "0.00"
+
+            ws.row_dimensions[linha].height = 20
 
             linha += 1
 
@@ -689,27 +863,44 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
         coluna_inicial = COLUNA_INICIAL_CALCULADA
 
         # ----------------------------------------------------
-        # Funcionário
+        # TÍTULO DA TABELA CALCULADA
         # ----------------------------------------------------
 
-        ws.cell(
+        celula = ws.cell(
             row=linha_cabecalho_bruto,
             column=coluna_inicial,
-            value=(
-                f"{funcionario} - "
-                f"Horas / Carga horária"
-            )
+            value="Resultado"
         )
 
+        celula.fill = preenchimento_principal
+        celula.font = fonte_titulo
+        celula.alignment = alinhamento_centro
+        celula.border = borda_fina
+
         # ----------------------------------------------------
-        # Meses
+        # CÉLULA S
+        # ----------------------------------------------------
+
+        celula = ws.cell(
+            row=linha_cabecalho_bruto,
+            column=coluna_inicial + 2,
+            value="Ano"
+        )
+
+        celula.fill = preenchimento_principal
+        celula.font = fonte_titulo
+        celula.alignment = alinhamento_centro
+        celula.border = borda_fina
+
+        # ----------------------------------------------------
+        # MESES
         # ----------------------------------------------------
 
         for mes in range(1, 13):
 
             coluna = (
                 coluna_inicial
-                + 3
+                + 1
                 + (mes - 1)
             )
 
@@ -719,38 +910,36 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
                 value=NOMES_MESES[mes]
             )
 
-            celula.fill = preenchimento
-            celula.font = fonte_branca_negrito
+            celula.fill = preenchimento_meses
+            celula.font = fonte_mes
             celula.alignment = alinhamento_centro
+            celula.border = borda_fina
 
-        # ----------------------------------------------------
-        # Primeira linha dos anos calculados
-        # ----------------------------------------------------
+        # ====================================================
+        # ANOS CALCULADOS
+        # ====================================================
 
         linha_calculada = linha_inicial_bruta
-
-        # ----------------------------------------------------
-        # Anos
-        # ----------------------------------------------------
 
         for indice, ano in enumerate(anos):
 
             # ------------------------------------------------
-            # Ano
+            # ANO
             # ------------------------------------------------
 
             celula_ano = ws.cell(
                 row=linha_calculada,
-                column=coluna_inicial + 2,
+                column=coluna_inicial,
                 value=ano
             )
 
-            celula_ano.fill = preenchimento
-            celula_ano.font = fonte_branca_negrito
+            celula_ano.fill = preenchimento_secundario
+            celula_ano.font = fonte_ano
             celula_ano.alignment = alinhamento_centro
+            celula_ano.border = borda_fina
 
             # ------------------------------------------------
-            # Linha correspondente na tabela bruta
+            # LINHA CORRESPONDENTE
             # ------------------------------------------------
 
             linha_bruta = (
@@ -759,14 +948,14 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
             )
 
             # ------------------------------------------------
-            # Meses
+            # MESES
             # ------------------------------------------------
 
             for mes in range(1, 13):
 
                 coluna_calculada = (
                     coluna_inicial
-                    + 3
+                    + 1
                     + (mes - 1)
                 )
 
@@ -776,20 +965,26 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
                     + (mes - 1)
                 )
 
-                # Letra da coluna de horas brutas
+                # ------------------------------------------------
+                # LETRA DA COLUNA BRUTA
+                # ------------------------------------------------
+
                 coluna_bruta_letra = ws.cell(
                     row=1,
                     column=coluna_bruta
                 ).column_letter
 
-                # Letra da coluna de carga horária
+                # ------------------------------------------------
+                # LETRA DA CARGA HORÁRIA
+                # ------------------------------------------------
+
                 coluna_carga_letra = ws.cell(
                     row=1,
                     column=COLUNA_INICIAL_BRUTA + 2
                 ).column_letter
 
                 # ------------------------------------------------
-                # Dias provenientes do 00682
+                # DIAS 00682
                 # ------------------------------------------------
 
                 dias = (
@@ -800,7 +995,7 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
                 )
 
                 # ------------------------------------------------
-                # Célula das horas brutas
+                # CÉLULA DAS HORAS
                 # ------------------------------------------------
 
                 horas_brutas = (
@@ -809,19 +1004,7 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
                 )
 
                 # ------------------------------------------------
-                # Fórmula
-                #
-                # Se houver dias:
-                #
-                #   horas / carga + dias
-                #
-                # Se não houver horas:
-                #
-                #   somente dias
-                #
-                # Se não houver nem horas nem dias:
-                #
-                #   vazio
+                # FÓRMULA
                 # ------------------------------------------------
 
                 if dias:
@@ -846,28 +1029,34 @@ def criar_excel(dados_horas, dados_dias, caminho_saida):
                         f')'
                     )
 
-                ws.cell(
+                # ------------------------------------------------
+                # CÉLULA CALCULADA
+                # ------------------------------------------------
+
+                celula = ws.cell(
                     row=linha_calculada,
                     column=coluna_calculada,
                     value=formula
                 )
 
-            # ------------------------------------------------
-            # IMPORTANTE:
-            # avança para a próxima linha/ano
-            # ------------------------------------------------
+                celula.alignment = alinhamento_centro
+                celula.border = borda_fina
+                celula.font = fonte_normal
+                celula.number_format = "0"
+
+            ws.row_dimensions[linha_calculada].height = 20
 
             linha_calculada += 1
 
-        # ----------------------------------------------------
-        # Espaço entre funcionários
-        # ----------------------------------------------------
+        # ====================================================
+        # SEPARAÇÃO ENTRE FUNCIONÁRIOS
+        # ====================================================
 
         linha += 2
 
-    # --------------------------------------------------------
-    # Salvar
-    # --------------------------------------------------------
+    # ========================================================
+    # SALVAR
+    # ========================================================
 
     try:
 
