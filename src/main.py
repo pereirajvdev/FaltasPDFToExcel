@@ -1196,7 +1196,7 @@ def main():
     # EXCEL
     # ========================================================
 
-    if dados_horas:
+    if dados_horas or dados_dias:
 
         caminho_saida = (
             pasta / "Faltas.xlsx"
@@ -1219,10 +1219,9 @@ def main():
             print("=" * 80)
 
     else:
-
         print()
         print(
-            "Nenhum lançamento de HORAS encontrado."
+            "Nenhum lançamento de HORAS ou DIAS encontrado."
         )
 
 
