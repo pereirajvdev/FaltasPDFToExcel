@@ -1,6 +1,5 @@
 import re
 import sys
-import math
 import pdfplumber
 
 from pathlib import Path
@@ -110,7 +109,7 @@ def extrair_ano_do_arquivo(caminho):
     return int(match.group(1))
 
 
-def converter_mes_619(mes_folha, ano_relatorio):
+def converter_mes(mes_folha, ano_relatorio):
     """
     Para a verba 00619:
 
@@ -224,7 +223,7 @@ def extrair_horas_619(texto, ano_relatorio):
         if quantidade is None:
             continue
 
-        mes, ano = converter_mes_619(
+        mes, ano = converter_mes(
             mes_folha[:2],
             ano_relatorio
         )
@@ -268,6 +267,12 @@ def extrair_dias_682(texto, ano_relatorio):
             "mes_folha"
         )
 
+        # Converter mês e ano da folha para mês e ano de referência
+        mes, ano = converter_mes(
+            mes_folha[:2],
+            ano_relatorio
+        )
+
         quantidade = normalizar_numero(
             match.group("quantidade")
         )
@@ -278,10 +283,11 @@ def extrair_dias_682(texto, ano_relatorio):
 
         resultados.append({
             "funcionario": funcionario,
-            "mes_folha": mes_folha,
+            "ano": ano,
+            "mes": mes,
             "quantidade": quantidade,
             "valor": valor,
-            "ano_relatorio": ano_relatorio,
+            "mes_folha": mes_folha,
         })
 
     return resultados
@@ -421,8 +427,8 @@ def processar_pdf(caminho, dados_horas, dados_dias):
             
             funcionario = registro["funcionario"]
 
-            mes_folha = registro["mes_folha"]
-            mes = int(mes_folha[:2])
+            ano = registro["ano"]
+            mes = registro["mes"]
 
             quantidade = registro["quantidade"]
 
@@ -432,13 +438,13 @@ def processar_pdf(caminho, dados_horas, dados_dias):
             if funcionario not in dados_dias:
                 dados_dias[funcionario] = {}
 
-            if ano_relatorio not in dados_dias[funcionario]:
-                dados_dias[funcionario][ano_relatorio] = {}
+            if ano not in dados_dias[funcionario]:
+                dados_dias[funcionario][ano] = {}
 
-            if mes not in dados_dias[funcionario][ano_relatorio]:
-                dados_dias[funcionario][ano_relatorio][mes] = 0
+            if mes not in dados_dias[funcionario][ano]:
+                dados_dias[funcionario][ano][mes] = 0
 
-            dados_dias[funcionario][ano_relatorio][mes] += quantidade
+            dados_dias[funcionario][ano][mes] += quantidade
 
     print("  Dias armazenados:")
 
